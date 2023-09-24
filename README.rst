@@ -1,17 +1,17 @@
-rpi-rf
+ftdi-rf
 ======
 
 Introduction
 ------------
 
-Python module for sending and receiving 433/315MHz LPD/SRD signals with generic low-cost GPIO RF modules on a Raspberry Pi.
+Python module for sending and receiving 433/315MHz LPD/SRD signals with generic low-cost GPIO RF modules on a Generic PC.
 
 Protocol and base logic ported ported from `rc-switch`_.
 
 Supported hardware
 ------------------
 
-Most generic 433/315MHz capable modules (cost: ~2€) connected via GPIO to a Raspberry Pi.
+Most generic 433/315MHz capable modules (cost: ~2€) connected via ftdi serial compatible hardware to a Generic PC.
 
 .. figure:: http://i.imgur.com/vG89UP9.jpg
    :alt: 433modules
@@ -39,63 +39,37 @@ Dependencies
 
 ::
 
-    RPi.GPIO
+    pyftdi
 
 Installation
 ------------
 
-On your Raspberry Pi, install the *rpi_rf* module via pip.
+On your PC, install the *ftdi_rf* module via pip.
 
 Python 3::
 
     # apt-get install python3-pip
-    # pip3 install rpi-rf
+    # pip3 install ftdi-rf
 
 Wiring diagram (example)
 ------------------------
 
-Raspberry Pi 1/2(B+)::
-
-                       RPI GPIO HEADER
-                  ____________
-                 |        ____|__
-                 |       |    |  |
-                 |     01|  . x  |02
-                 |       |  . x__|________       RX
-                 |       |  . x__|______  |   ________
-                 |       |  . .  |      | |  |        |
-       TX        |   ____|__x .  |      | |__|VCC     |
-     _______     |  |  __|__x .  |      |    |        |
-    |       |    |  | |  |  x____|______|____|DATA    |
-    |    GND|____|__| |  |  . .  |      |    |        |
-    |       |    |    |  |  . .  |      |    |DATA    |
-    |    VCC|____|    |  |  . .  |      |    |        |
-    |       |         |  |  . .  |      |____|GND     |
-    |   DATA|_________|  |  . .  |           |________|
-    |_______|            |  . .  |
-                         |  . .  |
-                         |  . .  |
-                         |  . .  |
-                         |  . .  |
-                         |  . .  |
-                         |  . .  |
-                       39|  . .  |40
-                         |_______|
+FT232RL or other supported ftdi serial hardware::
 
     TX:
-       GND > PIN 09 (GND)
-       VCC > PIN 02 (5V)
-      DATA > PIN 11 (GPIO17)
+       GND > (GND)
+       VCC > (5V)
+      DATA > RX (GPIO1), Or other pin of your liking)
 
     RX:
-       VCC > PIN 04 (5V)
-      DATA > PIN 13 (GPIO27)
-       GND > PIN 06 (GND)
+       VCC > (5V)
+      DATA > TX (GPIO0), Or other pin of your liking
+       GND > (GND)
 
 Usage
 -----
 
-See `scripts`_ (`rpi-rf_send`_, `rpi-rf_receive`_) which are also shipped as cmdline tools.
+See `scripts`_ (`ftdi-rf_send`_, `ftdi-rf_receive`_) which are also shipped as cmdline tools.
 
 Open Source
 -----------
@@ -107,8 +81,8 @@ Open Source
 .. _rc-switch: https://github.com/sui77/rc-switch
 .. _rc-switch Wiki: https://github.com/sui77/rc-switch/wiki
 .. _BSD Licence: http://www.linfo.org/bsdlicense.html
-.. _GitHub: https://github.com/milaq/rpi-rf
-.. _GitHub issues: https://github.com/milaq/rpi-rf/issues
-.. _scripts: https://github.com/milaq/rpi-rf/blob/master/scripts
-.. _rpi-rf_send: https://github.com/milaq/rpi-rf/blob/master/scripts/rpi-rf_send
-.. _rpi-rf_receive: https://github.com/milaq/rpi-rf/blob/master/scripts/rpi-rf_receive
+.. _GitHub: https://github.com/dpolitis/ftdi-rf
+.. _GitHub issues: https://github.com/dpolitis/ftdi-rf/issues
+.. _scripts: https://github.com/dpolitis/ftdi-rf/blob/master/scripts
+.. _ftdi-rf_send: https://github.com/dpolitis/ftdi-rf/blob/master/scripts/ftdi-rf_send
+.. _ftdi-rf_receive: https://github.com/dpolitis/ftdi-rf/blob/master/scripts/ftdi-rf_receive

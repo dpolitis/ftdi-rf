@@ -6,7 +6,7 @@ import sys
 import time
 import logging
 
-from rpi_rf import RFDevice
+from ftdi_rf import RFDevice
 
 rfdevice = None
 

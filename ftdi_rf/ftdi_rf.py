@@ -1,12 +1,13 @@
 """
-Sending and receiving 433/315Mhz signals with low-cost GPIO RF Modules on a Raspberry Pi.
+Sending and receiving 433/315Mhz signals with low-cost GPIO RF Modules on a Generic PC.
 """
 
 import logging
 import time
 from collections import namedtuple
 
-from RPi import GPIO
+from pyftdi.ftdi import Ftdi
+from pyftdi.gpio import GpioAsyncController
 
 MAX_CHANGES = 67
 
@@ -18,13 +19,20 @@ Protocol = namedtuple('Protocol',
                        'zero_high', 'zero_low',
                        'one_high', 'one_low'])
 PROTOCOLS = (None,
-             Protocol(350, 1, 31, 1, 3, 3, 1),
-             Protocol(650, 1, 10, 1, 2, 2, 1),
-             Protocol(100, 30, 71, 4, 11, 9, 6),
-             Protocol(380, 1, 6, 1, 3, 3, 1),
-             Protocol(500, 6, 14, 1, 2, 2, 1),
-             Protocol(200, 1, 10, 1, 5, 1, 1))
+             Protocol(350,   1,  31,  1,  3,  3,  1),    # protocol 1
+             Protocol(650,   1,  10,  1,  2,  2,  1),    # protocol 2
+             Protocol(100,  30,  71,  4, 11,  9,  6),    # protocol 3
+             Protocol(380,   1,   6,  1,  3,  3,  1),    # protocol 4
+             Protocol(500,   6,  14,  1,  2,  2,  1),    # protocol 5
+             Protocol(450,  23,   1,  1,  2,  2,  1),    # protocol 6 (HT6P20B)
+             Protocol(150,   2,  62,  1,  6,  6,  1),    # protocol 7 (HS2303-PT, i. e. used in AUKEY Remote)
+             Protocol(200,   3, 130,  7, 16,  3, 16),    # protocol 8 Conrad RS-200 RX
+             Protocol(200, 130,   7, 16,  7, 16,  3),    # protocol 9 Conrad RS-200 TX
+             Protocol(365,  18,   1,  3,  1,  1,  3),    # protocol 10 (1ByOne Doorbell)
+             Protocol(270,  36,   1,  1,  2,  2,  1),    # protocol 11 (HT12E)
+             Protocol(320,  36,   1,  1,  2,  2,  1))    # protocol 12 (SM5212)
 
+gpioac = GpioAsyncController()
 
 class RFDevice:
     """Representation of a GPIO RF device."""
@@ -56,7 +64,7 @@ class RFDevice:
         self.rx_bitlength = None
         self.rx_pulselength = None
 
-        GPIO.setmode(GPIO.BCM)
+        gpioac.configure('ftdi:///1', direction=0xFF & (1 << gpio))
         _LOGGER.debug("Using GPIO " + str(gpio))
 
     def cleanup(self):
@@ -66,7 +74,7 @@ class RFDevice:
         if self.rx_enabled:
             self.disable_rx()
         _LOGGER.debug("Cleanup")
-        GPIO.cleanup()
+        gpioac.close()
 
     def enable_tx(self):
         """Enable TX, set up GPIO."""
@@ -75,7 +83,8 @@ class RFDevice:
             return False
         if not self.tx_enabled:
             self.tx_enabled = True
-            GPIO.setup(self.gpio, GPIO.OUT)
+            gpioac.write(0x00)
+            gpioac.set_direction(0xFF & (1 << self.gpio), 0xFF)
             _LOGGER.debug("TX enabled")
         return True
 
@@ -83,7 +92,8 @@ class RFDevice:
         """Disable TX, reset GPIO."""
         if self.tx_enabled:
             # set up GPIO pin as input for safety
-            GPIO.setup(self.gpio, GPIO.IN)
+            gpioac.write(0x00)
+            gpioac.set_direction(0xFF & (1 << self.gpio), 0x00)
             self.tx_enabled = False
             _LOGGER.debug("TX disabled")
         return True
@@ -172,9 +182,9 @@ class RFDevice:
         if not self.tx_enabled:
             _LOGGER.error("TX is not enabled, not sending data")
             return False
-        GPIO.output(self.gpio, GPIO.HIGH)
+        gpioac.write(0xFF)
         self._sleep((highpulses * self.tx_pulselength) / 1000000)
-        GPIO.output(self.gpio, GPIO.LOW)
+        gpioac.write(0x00)
         self._sleep((lowpulses * self.tx_pulselength) / 1000000)
         return True
 
@@ -185,16 +195,16 @@ class RFDevice:
             return False
         if not self.rx_enabled:
             self.rx_enabled = True
-            GPIO.setup(self.gpio, GPIO.IN)
-            GPIO.add_event_detect(self.gpio, GPIO.BOTH)
-            GPIO.add_event_callback(self.gpio, self.rx_callback)
+            gpioac.write(0x00)
+            gpioac.set_direction(0xFF & (1 << self.gpio), 0x00)
             _LOGGER.debug("RX enabled")
         return True
 
     def disable_rx(self):
         """Disable RX, remove GPIO event detection."""
         if self.rx_enabled:
-            GPIO.remove_event_detect(self.gpio)
+            gpioac.write(0x00)
+            gpioac.set_direction(0xFF & (1 << self.gpio), 0xFF)
             self.rx_enabled = False
             _LOGGER.debug("RX disabled")
         return True
@@ -206,7 +216,7 @@ class RFDevice:
         duration = timestamp - self._rx_last_timestamp
 
         if duration > 5000:
-            if abs(duration - self._rx_timings[0]) < 200:
+            if duration - self._rx_timings[0] < 200:
                 self._rx_repeat_count += 1
                 self._rx_change_count -= 1
                 if self._rx_repeat_count == 2:
@@ -231,11 +241,11 @@ class RFDevice:
         delay_tolerance = delay * self.rx_tolerance / 100
 
         for i in range(1, change_count, 2):
-            if (abs(self._rx_timings[i] - delay * PROTOCOLS[pnum].zero_high) < delay_tolerance and
-                abs(self._rx_timings[i+1] - delay * PROTOCOLS[pnum].zero_low) < delay_tolerance):
+            if (self._rx_timings[i] - delay * PROTOCOLS[pnum].zero_high < delay_tolerance and
+                    self._rx_timings[i+1] - delay * PROTOCOLS[pnum].zero_low < delay_tolerance):
                 code <<= 1
-            elif (abs(self._rx_timings[i] - delay * PROTOCOLS[pnum].one_high) < delay_tolerance and
-                  abs(self._rx_timings[i+1] - delay * PROTOCOLS[pnum].one_low) < delay_tolerance):
+            elif (self._rx_timings[i] - delay * PROTOCOLS[pnum].one_high < delay_tolerance and
+                  self._rx_timings[i+1] - delay * PROTOCOLS[pnum].one_low < delay_tolerance):
                 code <<= 1
                 code |= 1
             else:
@@ -250,8 +260,8 @@ class RFDevice:
             return True
 
         return False
-           
-    def _sleep(self, delay):      
+
+    def _sleep(self, delay):
         _delay = delay / 100
         end = time.time() + delay - _delay
         while time.time() < end:
